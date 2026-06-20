@@ -291,13 +291,15 @@ func (Frontend) ResolveFile(root, abs string) (api.FileMeta, error) {
 			DirRel:    relToRoot(root, dir),
 		}, nil
 	}
-	rel, err := filepath.Rel(info.Dir, filepath.Dir(abs))
-	if err != nil {
-		return api.FileMeta{}, err
-	}
-	rel = filepath.ToSlash(rel)
-	if rel == "." {
+	rel, relErr := filepath.Rel(info.Dir, filepath.Dir(abs))
+	if relErr != nil {
+		fmt.Fprintf(os.Stderr, "mekami: gomod rel: %s vs %s: %v (degrading DirRel to empty)\n", info.Dir, filepath.Dir(abs), relErr)
 		rel = ""
+	} else {
+		rel = filepath.ToSlash(rel)
+		if rel == "." {
+			rel = ""
+		}
 	}
 	pkgID := info.ModuleID
 	if rel != "" {
@@ -347,17 +349,20 @@ func (Frontend) ParseFile(root, rel, abs, hash string, mtime, size int64) (api.P
 		// the file has a stable, file-independent
 		// qualified name prefix.
 		dirRel, rerr := filepath.Rel(info.Dir, filepath.Dir(abs))
-		if rerr == nil {
+		if rerr != nil {
+			fmt.Fprintf(os.Stderr, "mekami: gomod rel: %s vs %s: %v (degrading DirRel to empty)\n", info.Dir, filepath.Dir(abs), rerr)
+			dirRel = ""
+		} else {
 			dirRel = filepath.ToSlash(dirRel)
 			if dirRel == "." {
 				dirRel = ""
 			}
-			meta.PackageID = info.PackageID
-			if dirRel != "" {
-				meta.PackageID = joinPackagePath(info.PackageID, dirRel)
-			}
-			meta.DirRel = dirRel
 		}
+		meta.PackageID = info.PackageID
+		if dirRel != "" {
+			meta.PackageID = joinPackagePath(info.PackageID, dirRel)
+		}
+		meta.DirRel = dirRel
 	}
 
 	data, err := os.ReadFile(abs)
